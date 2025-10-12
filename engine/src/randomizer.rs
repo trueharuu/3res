@@ -30,6 +30,11 @@ impl Rng {
         self.seed
     }
 
+    pub fn pick<'a, T>(&mut self, array: &'a [T]) -> &'a T {
+        let idx = (self.next_float() * (array.len() as f64)).floor() as usize;
+        &array[idx.min(array.len() - 1)]
+    }
+
     pub fn next_float(&mut self) -> f64 {
         f64::from(self.next() - 1) / 2_147_483_646f64
     }

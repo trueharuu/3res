@@ -25,6 +25,10 @@ where
         }
     }
 
+    pub fn has(&self, key: &K) -> bool {
+        self.map.contains_key(key)
+    }
+
     pub fn get_mut_or_default(&mut self, key: K) -> &mut V {
         self.map.entry(key).or_insert_with(&self.default)
     }
@@ -43,6 +47,10 @@ where
 
     pub fn into_inner(self) -> HashMap<K, V, S> {
         self.map
+    }
+
+    pub fn insert(&mut self, key: K, value: V) -> Option<V> {
+        self.map.insert(key, value)
     }
 }
 

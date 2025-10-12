@@ -1,35 +1,19 @@
-// #![warn(clippy::pedantic)]
-#![allow(clippy::perf, clippy::correctness)]
-#![allow(
-    clippy::missing_errors_doc,
-    clippy::struct_excessive_bools,
-    clippy::type_complexity
-)]
-#![deny(unused_qualifications)]
+#![feature(gen_blocks, yield_expr)]
+use std::{env, io};
 
-use std::io;
-
-use crate::{
-    file::{corners::Corners, kicks::Kicks, piece::Bag},
-    repl::{Repl, State},
-};
-
-pub mod board;
-pub mod common;
-pub mod environment;
-pub mod file;
-pub mod input;
-pub mod pc;
-pub mod piece;
-pub mod randomizer;
-pub mod ren;
-pub mod repl;
-
+use engine::{file::{corners::Corners, kicks::Kicks, piece::Bag}, repl::{Repl, State}};
 fn main() {
-    let k_file = std::fs::read_to_string("data/srsx.kick").unwrap();
-    let b_file = std::fs::read_to_string("data/tetromino.piece").unwrap();
-    let c_file = std::fs::read_to_string("data/handheld.corners").unwrap();
+    let mut args = env::args();
+    args.next();
+    let kn = args.next().unwrap();
+    let bn = args.next().unwrap_or("tetromino".to_string());
+    let cn = args.next().unwrap_or("handheld".to_string());
+    // println!("{kn} {bn} {cn}");
+    let k_file = std::fs::read_to_string(format!("data/{kn}.kick")).unwrap();
+    let b_file = std::fs::read_to_string(format!("data/{bn}.piece")).unwrap();
+    let c_file = std::fs::read_to_string(format!("data/{cn}.corners")).unwrap();
 
+    // println!("{k_file}");
     let kicks: Kicks = k_file.parse().unwrap();
     let bag: Bag = b_file.parse().unwrap();
     let corners: Corners = c_file.parse().unwrap();
@@ -38,6 +22,7 @@ fn main() {
         kicks,
         bag,
         corners,
+        fingerprint: (kn,bn,cn),
     };
 
     let repl = Repl::new(io::stdin(), io::stdout(), s);

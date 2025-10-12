@@ -1,8 +1,8 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, hash::Hash};
 
 use crate::{board::Board, environment::Environment, input::Finesse};
 
-#[derive(Debug, Clone, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct Node<'a> {
     pub board: Board,
     pub hold: Option<char>,
@@ -22,8 +22,9 @@ pub fn ren_bfs(state: &Node, env: &Environment) -> Vec<Vec<PathItem>> {
     // todo: optimize for n > 0
     // `n` represents the maximum amount of breaks we allow in a single path
     // problem is our sample space increases exponentially as `n` increases
+    // when `n` is 0 we discard an extremely large amount of cases because they just kill you
     // this usually isnt an issue given that combo tends to have very few breaks on a sensible `vision`
-    // but this does take an abundantly long time for poor `vision` or just actually evil queues
+    // but this does take an abundantly long time for poor `vision` or just actually evil queues that have many breaks
     for n in 0..env.vision {
         queue.push_front(state.clone());
         visited.push(state.clone());
@@ -53,12 +54,20 @@ pub fn ren_bfs(state: &Node, env: &Environment) -> Vec<Vec<PathItem>> {
         }
     }
 
-    return vec![];
+    vec![]
 }
 
 impl<'a> PartialEq for Node<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.ptr == other.ptr && self.hold == other.hold && self.board == other.board
+    }
+}
+
+impl<'a> Hash for Node<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ptr.hash(state);
+        self.hold.hash(state);
+        self.board.hash(state);
     }
 }
 

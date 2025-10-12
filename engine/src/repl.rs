@@ -6,6 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
+    time::Instant,
 };
 
 use crate::{
@@ -13,14 +14,16 @@ use crate::{
     environment::Environment,
     file::{corners::Corners, kicks::Kicks, piece::Bag},
     input::{Finesse, Input, Key},
+    pc::max_pcs_in_queue,
     ren::{Node, PathItem, ren_bfs},
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct State {
     pub kicks: Kicks,
     pub bag: Bag,
     pub corners: Corners,
+    pub fingerprint: (String, String, String),
 }
 pub struct Repl<I, O> {
     pub i: I,
@@ -82,6 +85,60 @@ where
         };
         match ma {
             "pc" => {
+                // let b = argv.next().unwrap();
+                let queue: Vec<char> = argv.next().unwrap().chars().collect();
+                // let hold = argv
+                //     .next()
+                //     .filter(|x| *x != "_")
+                //     .and_then(|x| x.chars().next());
+                // let vision: usize = argv.next().unwrap().parse().unwrap();
+                // let foresight: usize = argv.next().unwrap().parse().unwrap();
+
+                let flags = argv.next().unwrap();
+
+                let env: Environment = Environment {
+                    droptype: crate::environment::DropType::Sonic,
+                    vision: 0,
+                    foresight: 0,
+                    can_180: flags.contains('f'),
+                    can_das: flags.contains('d'),
+                    can_tap: flags.contains('t'),
+                    can_hold: flags.contains('h'),
+                    upstack: flags.contains('u'),
+                    state: &s,
+                };
+
+                let pcs = env.pcs(4);
+                let z = max_pcs_in_queue(&queue, &env, pcs);
+                z.iter()
+                    .map(|x| x.queue().collect::<String>())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+            "pcgen" => {
+                let n = argv.next().and_then(|x| x.parse().ok()).unwrap();
+                let env: Environment = Environment {
+                    droptype: crate::environment::DropType::Sonic,
+                    vision: 0,
+                    foresight: 0,
+                    can_180: true,
+                    can_das: true,
+                    can_tap: true,
+                    can_hold: true,
+                    upstack: true,
+                    state: &s,
+                };
+
+                let i = Instant::now();
+                let _ = env.pcs(n);
+                let e = i.elapsed();
+
+                // println!("{q:#?}");
+                println!("{}ms", e.as_millis());
+
+                String::new()
+            }
+            "ren" => {
                 let b = argv.next().unwrap();
                 let queue: Vec<char> = argv.next().unwrap().chars().collect();
                 let hold = argv
@@ -94,9 +151,6 @@ where
                 let flags = argv.next().unwrap();
 
                 let env: Environment = Environment {
-                    bag: s.bag,
-                    kicks: s.kicks,
-                    corners: s.corners,
                     droptype: crate::environment::DropType::Sonic,
                     vision,
                     foresight,
@@ -105,6 +159,7 @@ where
                     can_tap: flags.contains('t'),
                     can_hold: flags.contains('h'),
                     upstack: flags.contains('u'),
+                    state: &s,
                 };
 
                 let board: Board = b.parse().unwrap();
@@ -143,9 +198,6 @@ where
                 let flags = argv.next().unwrap();
 
                 let env: Environment = Environment {
-                    bag: s.bag,
-                    kicks: s.kicks,
-                    corners: s.corners,
                     droptype: crate::environment::DropType::Sonic,
                     vision,
                     foresight,
@@ -154,6 +206,7 @@ where
                     can_tap: flags.contains('t'),
                     can_hold: flags.contains('h'),
                     upstack: flags.contains('u'),
+                    state: &s,
                 };
 
                 let board: Board = b.parse().unwrap();
@@ -184,9 +237,6 @@ where
                 let flags = argv.next().unwrap();
 
                 let env: Environment = Environment {
-                    bag: s.bag,
-                    kicks: s.kicks,
-                    corners: s.corners,
                     droptype: crate::environment::DropType::Sonic,
                     vision: 7,
                     foresight: 1,
@@ -195,6 +245,7 @@ where
                     can_tap: flags.contains('t'),
                     can_hold: flags.contains('h'),
                     upstack: flags.contains('u'),
+                    state: &s,
                 };
 
                 let mut i = Input::new(board, piece, &env);
@@ -215,7 +266,7 @@ where
                     i.piece.location,
                     i.piece.rotation,
                     i.piece
-                        .cells(&env.bag)
+                        .cells(&env)
                         .map(|x| x.unwrap().to_string())
                         .collect::<Vec<_>>()
                         .join("")
@@ -230,9 +281,6 @@ where
                 let flags = argv.next().unwrap();
 
                 let env: Environment = Environment {
-                    bag: s.bag,
-                    kicks: s.kicks,
-                    corners: s.corners,
                     droptype: crate::environment::DropType::Sonic,
                     vision: 7,
                     foresight: 1,
@@ -241,6 +289,7 @@ where
                     can_tap: flags.contains('t'),
                     can_hold: flags.contains('h'),
                     upstack: flags.contains('u'),
+                    state: &s,
                 };
 
                 println!("keyboard = {:?}", env.keyboard());

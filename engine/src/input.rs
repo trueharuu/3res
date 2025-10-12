@@ -14,7 +14,7 @@ use crate::{
 pub struct Input<'a> {
     pub board: Board,
     pub piece: Piece,
-    pub environment: &'a Environment,
+    pub environment: &'a Environment<'a>,
 
     last_successful_action: Option<Key>,
 }
@@ -44,7 +44,7 @@ impl<'a> Input<'a> {
 
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        let mut c = self.piece.cells(&self.environment.bag);
+        let mut c = self.piece.cells(self.environment);
         c.all(|x| matches!(x, Some(v) if v.x < self.board.width() && !self.board.get(v.x,v.y)))
     }
 
@@ -56,6 +56,7 @@ impl<'a> Input<'a> {
 
         // lol
         unsafe {
+            // dbg!("usafe block");
             self.piece.location.x = cx.unwrap_unchecked();
         }
         if !self.is_valid() {
@@ -73,6 +74,7 @@ impl<'a> Input<'a> {
         }
 
         unsafe {
+            // dbg!("usafe block");
             self.piece.location.x = cx.unwrap_unchecked();
         }
         if !self.is_valid() {
@@ -90,6 +92,7 @@ impl<'a> Input<'a> {
         }
 
         unsafe {
+            // dbg!("usafe block");
             self.piece.location.y = cx.unwrap_unchecked();
         }
         if !self.is_valid() {
@@ -159,6 +162,7 @@ impl<'a> Input<'a> {
         let fr = self.piece.rotation.rotate_cw();
         let k = self
             .environment
+            .state
             .kicks
             .get(&self.piece, ir, fr)
             .expect("piece should have this interaction defined in the .kick file");
@@ -195,6 +199,7 @@ impl<'a> Input<'a> {
         let fr = self.piece.rotation.rotate_ccw();
         let k = self
             .environment
+            .state
             .kicks
             .get(&self.piece, ir, fr)
             .expect("piece should have this interaction defined in the .kick file");
@@ -229,6 +234,7 @@ impl<'a> Input<'a> {
         let fr = self.piece.rotation.rotate_180();
         let k = self
             .environment
+            .state
             .kicks
             .get(&self.piece, ir, fr)
             .expect("piece should have this interaction defined in the .kick file");
@@ -279,7 +285,7 @@ impl<'a> Input<'a> {
             self.sonic_drop();
         }
 
-        for c in self.piece.cells(&self.environment.bag).flatten() {
+        for c in self.piece.cells(self.environment).flatten() {
             self.board.set(c.x, c.y, true);
         }
 
@@ -298,6 +304,7 @@ impl<'a> Input<'a> {
 
         let Some(corner_set) = self
             .environment
+            .state
             .corners
             .get(self.piece.name, self.piece.rotation)
         else {
@@ -409,9 +416,47 @@ impl FromStr for Key {
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 pub struct Finesse {
-    packed: u64,
+    packed: u128,
     pub len: u8,
     spin: bool,
+}
+
+impl Extend<Key> for Finesse {
+    fn extend<T: IntoIterator<Item = Key>>(&mut self, iter: T) {
+        for i in iter {
+            self.push(i);
+        }
+    }
+}
+
+impl IntoIterator for Finesse {
+    type Item = Key;
+    type IntoIter = FinesseIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        FinesseIterator { f: self, idx: 0 }
+    }
+}
+
+pub struct FinesseIterator {
+    f: Finesse,
+    idx: u8,
+}
+
+impl Iterator for FinesseIterator {
+    type Item = Key;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.f.len {
+            return None;
+        }
+        let val = (self.f.packed >> (self.idx * 4)) & 0x0F;
+        self.idx += 1;
+        Some(unsafe {
+            dbg!("usafe block");
+            std::mem::transmute::<u8, Key>(val as u8)
+        })
+    }
 }
 
 impl Finesse {
@@ -423,7 +468,7 @@ impl Finesse {
         }
     }
     pub fn push(&mut self, key: Key) {
-        self.packed |= (key as u64) << (self.len * 4);
+        self.packed |= (key as u128) << (self.len * 4);
         self.len += 1;
     }
 
@@ -432,7 +477,11 @@ impl Finesse {
             return None;
         }
         let val = (self.packed >> (idx * 4)) & 0x0F;
-        Some(unsafe { std::mem::transmute::<u8, Key>(val as u8) })
+        Some(unsafe {
+            // dbg!("usafe block");
+            // println!("{self} {idx}");
+            std::mem::transmute::<u8, Key>(val as u8)
+        })
     }
 
     pub fn with_spin(mut self, s: bool) -> Self {
@@ -446,7 +495,7 @@ impl Finesse {
             v.push(self.get(i).unwrap().short());
         }
 
-        v.join(" ")
+        v.join(",")
     }
 
     pub fn with(t: &[Key]) -> Self {
@@ -487,5 +536,48 @@ impl Display for Finesse {
         write!(f, "{}", if self.spin { " *" } else { "" })?;
 
         Ok(())
+    }
+}
+
+impl FromStr for Finesse {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.trim().is_empty() {
+            return Ok(Self::new());
+        }
+        s.split(',')
+            .map(|x| x.parse())
+            .collect::<Result<Vec<_>, _>>()
+            .map(|x| Self::with(&x))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Pair(pub char, pub Finesse);
+
+// this is of format `(X:cw,ccw,sd,...)`
+impl FromStr for Pair {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim();
+        if !s.starts_with('(') || !s.ends_with(')') {
+            return Err("finesse must start with '(' and end with ')'".into());
+        }
+        let s = &s[1..s.len() - 1];
+        
+        let mut parts = s.splitn(2, ':');
+        let piece = parts
+            .next()
+            .ok_or_else(|| "missing piece".to_string())?
+            .chars()
+            .next()
+            .ok_or_else(|| "piece must be a single character".to_string())?;
+        let finesse_str = parts
+            .next()
+            .ok_or_else(|| "missing finesse".to_string())?;
+        let finesse: Finesse = finesse_str.parse()?;
+
+
+        Ok(Self(piece, finesse))
     }
 }

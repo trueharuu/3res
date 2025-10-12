@@ -1,11 +1,19 @@
 /// 4x64 board.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Board {
-    lo: u128,
-    hi: u128,
+    pub lo: u128,
+    pub hi: u128,
 }
 
 impl Board {
+    pub fn empty() -> Self {
+        Self { lo: 0, hi: 0 }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.lo == 0 && self.hi == 0
+    }
+
     #[inline]
     #[must_use]
     pub fn get(&self, x: usize, y: usize) -> bool {
@@ -127,12 +135,12 @@ impl Board {
         environment: &Environment,
     ) -> Vec<(Self, Finesse)> {
         let mut queue = VecDeque::new();
-        let mut visited_active = HashMap::new(); // Track active states
-        let mut final_placements = HashMap::new(); // Track final placements
+        let mut visited_active = HashMap::new();
+        let mut final_placements = HashMap::new();
 
         let available_keys = environment.keyboard();
 
-        // Initial active state (not placed)
+        // (not placed)
         let initial_state = {
             let i = Input::new(*self, piece, environment);
             i.fingerprint()
@@ -143,7 +151,7 @@ impl Board {
         visited_active.insert(initial_state, initial_finesse);
 
         while let Some(input_seq) = queue.pop_front() {
-            // Check if this sequence leads to a new final placement
+            // if this sequence leads to a new final placement
             let placed_state = {
                 let mut i = Input::new(*self, piece, environment);
                 i.apply(input_seq);
@@ -155,7 +163,6 @@ impl Board {
                 let mut new_seq = input_seq;
                 new_seq.push(*key);
 
-                // Get the ACTIVE state (not placed)
                 let next_active_state = {
                     let mut i = Input::new(*self, piece, environment);
                     i.apply(new_seq);
