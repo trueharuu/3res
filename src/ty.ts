@@ -1,0 +1,13 @@
+import { Classes, Engine, Types } from "@haelp/teto";
+export type Room = Classes.Room;
+export type Mino = Engine.Mino;
+export type Rotation = Engine.Rotation;
+export type RoomOptions = Types.Game.Options;
+export type Cell = Engine.BoardSquare;
+export type Engine = Engine.Engine;
+export type Board = Engine.Board;
+export type BoardState = Array<Array<Cell>>;
+export type Key = Types.Game.Key;
+export type KeyPress = Types.Game.Tick.Keypress;
+export import Tick = Types.Game.Tick;
+export type SpinBonuses = Types.Game.SpinBonuses;
