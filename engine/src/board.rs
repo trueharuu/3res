@@ -271,7 +271,5 @@ use std::{
 };
 
 use crate::{
-    environment::Environment,
-    input::{Finesse, Input},
-    piece::PieceRef,
+    environment::Environment, input::{Finesse, Input}, piece::PieceRef
 };

@@ -1,6 +1,7 @@
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
-    hash::Hash,
+    collections::{HashMap, HashSet},
+    hash::{DefaultHasher, Hash, Hasher},
+    io::Write,
 };
 
 use smallvec::{SmallVec, smallvec};
@@ -12,7 +13,7 @@ use crate::{
 };
 
 #[derive(Clone, Eq, Debug)]
-pub struct History(pub SmallVec<[Pair; 16]>);
+pub struct History(pub SmallVec<[Pair; 4]>);
 
 impl History {
     pub fn queue(&self) -> impl Iterator<Item = char> {
@@ -30,8 +31,10 @@ impl PartialEq for History {
 }
 
 impl Hash for History {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.queue().collect::<String>().hash(state);
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for c in self.queue() {
+            c.hash(state);
+        }
     }
 }
 
@@ -53,7 +56,15 @@ impl Ord for History {
     }
 }
 
-pub type Set<T> = BTreeSet<T>;
+fn hash_queue(history: &History) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    for c in history.queue() {
+        c.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+pub type Set<T> = HashSet<T>;
 /// Generates all possible queues of length less than or equal to `n` such that
 /// from an empty board, queue can be placed such that we result in a perfect clear
 /// for each queue, return the list of inputs used to get there
@@ -62,41 +73,47 @@ pub type Set<T> = BTreeSet<T>;
 /// I = I ()
 /// JJ = J () J (f r)
 /// TTSZ = [longer finesse...]
-pub fn generate_all_pc_queues(n: usize, env: &Environment) -> Set<History> {
-    // forwards_saved_transitions = {}  # (board_hash, piece) -> next_board_list
-    let mut forwards_saved_transitions = HashMap::new();
-    // forwards_queue = deque()
-    let mut forwards_queue: VecDeque<(Board, History)> = VecDeque::new();
+pub fn generate_all_pc_queues(buf: &mut impl Write, n: usize, env: &Environment) {
+    const MAX_CACHE_SIZE: usize = 10000; // Maximum number of cached transitions
+    
+    // Use a Vec as a stack for depth-first search (uses less memory than VecDeque)
+    let mut stack: Vec<(Board, History)> = Vec::new();
+    let mut forwards_saved_transitions = HashMap::with_capacity(MAX_CACHE_SIZE);
+    
+    // Use a more compact visited state representation
+    let mut visited: HashSet<u64> = HashSet::new();
+    
+    // Track cache stats for periodic cleanup
+    let mut cache_access_count = 0;
+    
+    stack.push((Board::empty(), History(smallvec![])));
 
-    // forwards_reachable_states = defaultdict(set)  # board_hash -> queue_set
-    let mut forwards_reachable_states: HashMap<Board, Set<History>> = HashMap::new();
-
-    let mut visited = Set::new();
-
-    forwards_queue.push_back((Board::empty(), History(smallvec![])));
-
-    // let mut i: usize = 0;
-    // let mut max = 7usize.pow(n as u32);
-
-    while let Some(current) = forwards_queue.pop_front() {
-        // let key = (current.0, current.1.0);
-        if visited.contains(&current) {
+    while let Some((board, history)) = stack.pop() {
+        // Create a combined hash of board and history
+        let mut hasher = DefaultHasher::new();
+        board.hash(&mut hasher);
+        for c in history.queue() {
+            c.hash(&mut hasher);
+        }
+        let state_hash = hasher.finish();
+        
+        if !visited.insert(state_hash) {
             continue;
         }
-
-        visited.insert(current.clone());
-
-        // i += 1;
-        let (board, history) = current;
+        
+        // Periodically clear the transition cache if it gets too large
+        cache_access_count += 1;
+        if cache_access_count % 1000 == 0 && forwards_saved_transitions.len() > MAX_CACHE_SIZE {
+            forwards_saved_transitions.clear();
+        }
 
         // check each possible next piece
         for piece in env.state.bag.pieces() {
-            if !forwards_saved_transitions.contains_key(&(board, piece)) {
-                forwards_saved_transitions
-                    .insert((board, piece), board.get_next_boards(piece, env));
-            }
+            let next_boards = forwards_saved_transitions
+                .entry((board, piece))
+                .or_insert_with(|| board.get_next_boards(piece, env));
 
-            for &(next_board, f) in forwards_saved_transitions.get(&(board, piece)).unwrap() {
+            for &mut (next_board, f) in next_boards {
                 // track reachable board states
                 if next_board.height() <= n {
                     let new_history: History = {
@@ -105,28 +122,25 @@ pub fn generate_all_pc_queues(n: usize, env: &Environment) -> Set<History> {
                         History(n)
                     };
                     if new_history.0.len() < n && !next_board.is_empty() {
-                        forwards_queue.push_back((next_board, new_history.clone()));
+                        stack.push((next_board, new_history));
+                    } else if next_board.is_empty() {
+                        writeln!(
+                            buf,
+                            "{} = {}",
+                            new_history.queue().collect::<String>(),
+                            new_history
+                                .0
+                                .iter()
+                                .map(|x| format!("({}:{})", x.0, x.1.short()))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        )
+                        .unwrap();
                     }
-
-                    forwards_reachable_states
-                        .entry(next_board)
-                        .or_default()
-                        .insert(new_history.clone());
-                    // if next_board.is_empty() {
-                    //     println!("{} {i}/{max}", new_history.queue().collect::<String>())
-                    // }
                 }
             }
         }
     }
-
-    for (board, queues) in forwards_reachable_states {
-        if board.is_empty() {
-            return queues;
-        }
-    }
-
-    Set::new()
 }
 
 /// Obtains all possible ways to play a queue given one hold
@@ -168,5 +182,8 @@ pub fn get_queue_orders(queue: &[char]) -> Vec<String> {
 
 pub fn max_pcs_in_queue(queue: &[char], _env: &Environment, _pcs: Set<History>) -> Vec<History> {
     // todo: make this not fake LOL
-    vec![History(smallvec![Pair(queue[0], Finesse::with(&[Key::Rotate180]))])]
+    vec![History(smallvec![Pair(
+        queue[0],
+        Finesse::with(&[Key::Rotate180])
+    )])]
 }

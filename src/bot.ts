@@ -85,13 +85,13 @@ export class Bot {
     return { keys };
   }
 
-  public async populate(c: Engine) {
-    this.send(`pcp ${this.flags(c)} ${this.options.vision} ${this.options.n}`);
+  public async populate() {
+    this.send(`pcp ${this.flags()} ${this.options.vision} ${this.options.n}`);
   }
 
   public async regenerate(c: Engine): Promise<Array<[string, Array<Key>]>> {
     const queue = ((c.held || '') + c.falling.symbol + c.queue.value.join('')).toUpperCase();
-    const resp = await this.send(`pcr ${this.flags(c)} ${this.options.vision} ${queue} ${this.options.n}`);
+    const resp = await this.send(`pcr ${this.flags()} ${this.options.vision} ${queue} ${this.options.n}`);
 
     return resp.split(' ').map(x => {
       let [piece, f] = x.split(':');
@@ -177,7 +177,7 @@ export class Bot {
     });
   }
 
-  public flags(c: Engine): string {
+  public flags(): string {
     return [
       this.options.can180 ? "f" : "-",
       "t",

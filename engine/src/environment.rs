@@ -35,7 +35,6 @@ impl<'a> Environment<'a> {
         let mut can_das = false;
         let mut can_hold = false;
         let mut upstack = false;
-        let mut droptype = DropType::Soft;
 
         for c in flags.chars() {
             match c {
@@ -103,42 +102,34 @@ impl<'a> Environment<'a> {
         m
     }
 
-    pub fn pcs(&self, n: usize) -> Set<History> {
+    pub fn pcs(&self, n: usize, force: bool) -> Set<History> {
         // if it exists as a file, load from file
         let path = format!("data/{}_{n}.pc", self.state.fingerprint.0);
 
-        if let Ok(s) = std::fs::read_to_string(&path) {
+        if !force && let Ok(s) = std::fs::read_to_string(&path) {
             return Self::parse_pcs(&s);
         }
 
         // otherwise, generate and save to file
-        let pcs = generate_all_pc_queues(n, self);
         let mut f = std::fs::File::create(&path).unwrap();
-
         writeln!(
             f,
             "#n={n};kicktable={};total={}",
-            self.state.fingerprint.0,
-            pcs.len()
+            self.state.fingerprint.0, 0,
         )
         .unwrap();
-        for i in &pcs {
-            if i.queue().count() != n {
-                continue;
-            }
-            writeln!(
-                f,
-                "{} = {}",
-                i.queue().collect::<String>(),
-                i.0.iter()
-                    .map(|x| format!("({}:{})", x.0, x.1.short()))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            )
-            .unwrap();
-        }
+        generate_all_pc_queues(&mut f, n, self);
 
-        pcs
+        // dedup the file
+        let s = std::fs::read_to_string(&path).unwrap();
+        let mut lines: Vec<_> = s.lines().collect();
+        lines.sort();
+        lines.dedup_by_key(|x| x.split('=').next().unwrap().trim());
+        let s = lines.join("\n");
+
+        std::fs::write(&path, s).unwrap();
+
+        Self::parse_pcs(&std::fs::read_to_string(&path).unwrap())
     }
 
     pub fn parse_pcs(s: &str) -> Set<History> {
@@ -160,7 +151,7 @@ impl<'a> Environment<'a> {
             let f = finesse
                 .split_ascii_whitespace()
                 .map(|x| x.parse())
-                .collect::<Result<SmallVec<[Pair; 16]>, _>>()
+                .collect::<Result<SmallVec<[Pair; _]>, _>>()
                 .unwrap();
 
             pcs.insert(History(f));

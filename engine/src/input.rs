@@ -551,7 +551,7 @@ impl FromStr for Finesse {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Pair(pub char, pub Finesse);
 
 // this is of format `(X:cw,ccw,sd,...)`

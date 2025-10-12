@@ -88,7 +88,7 @@ where
                 );
 
                 let queue = argv.next().unwrap();
-                let pcs = e.pcs(argv.next().unwrap().parse().unwrap());
+                let pcs = e.pcs(argv.next().unwrap().parse().unwrap(), false);
 
                 let chosen = max_pcs_in_queue(&queue.chars().collect::<Vec<_>>(), &e, pcs);
 
@@ -119,7 +119,10 @@ where
                     0,
                 );
 
-                e.pcs(argv.next().unwrap().parse().unwrap());
+                e.pcs(
+                    argv.next().unwrap().parse().unwrap(),
+                    argv.next().map(|x| x == "F").unwrap_or(false),
+                );
                 String::new()
             }
             // "ex" => std::process::abort(),

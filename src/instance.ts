@@ -167,6 +167,10 @@ export class Instance {
       return await this.room.chat("no! (unauthorized)");
     }
 
+    if (argv[0] === 'gen') {
+      await this.bot.populate();
+    }
+
     if (argv[0] === "pps") {
       const n = Number(argv[1]);
       if (Number.isNaN(n)) {
