@@ -30,7 +30,7 @@ export class Instance {
     this.room = await this.cl.rooms.join(this.code);
 
     if (check_settings(this.room.options).length === 0) {
-      await this.room.switch("player").catch((c) => {});
+      await this.room.switch("player").catch((c) => { });
     }
 
     this.bot = new Bot();
@@ -183,44 +183,6 @@ export class Instance {
       this.bot.options.pps = n;
     }
 
-    if (argv[0] === "burst") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (n > 30 || n < 0) {
-        return await this.room.chat("no! (must be 0 <= burst <= 30)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      await this.room.chat(`ok burst=${n}`);
-
-      this.bot.options.burst = n;
-    }
-
-    if (argv[0] === "slack") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (n > 30 || n < 0) {
-        return await this.room.chat("no! (must be 0 <= burst <= 30)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      await this.room.chat(`ok slack=${n}`);
-
-      this.bot.options.slack = n;
-    }
-
     if (argv[0] === "vision") {
       const n = Number(argv[1]);
       if (Number.isNaN(n)) {
@@ -263,18 +225,6 @@ export class Instance {
       }
     }
 
-    if (argv[0] === "upstack") {
-      if (argv[1] === "true") {
-        this.bot.options.upstack = true;
-      } else if (argv[1] === "false") {
-        this.bot.options.upstack = false;
-      } else {
-        return await this.room.chat(
-          'no! (upstack must be one of "true" | "false")',
-        );
-      }
-    }
-
     if (argv[0] === "finesse") {
       if (argv[1] === "human") {
         this.bot.options.finesse = FinesseStyle.Human;
@@ -285,136 +235,6 @@ export class Instance {
       } else {
         return await this.room.chat(
           'no! (finesse must be one of "human", "instant")',
-        );
-      }
-    }
-
-    if (argv[0] === "start_threshold") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (n < 0) {
-        return await this.room.chat("no! (must be 0 < threshold)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      await this.room.chat(`ok start_threshold=${n}`);
-
-      this.bot.options.start_threshold = n;
-    }
-
-    if (argv[0] === "break_threshold") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (n < 0) {
-        return await this.room.chat("no! (must be 0 < threshold)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      await this.room.chat(`ok break_threshold=${n}`);
-
-      this.bot.options.break_threshold = n;
-    }
-
-    if (argv[0] === "garbage_threshold") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      if (n < 0) {
-        return await this.room.chat("no! (must be 0 < threshold)");
-      }
-
-      await this.room.chat(`ok garbage_threshold=${n}`);
-
-      this.bot.options.garbage_threshold = n;
-    }
-
-    if (argv[0] === "gb_weight") {
-      const n = Number(argv[1]);
-      if (Number.isNaN(n)) {
-        return await this.room.chat("no! (not a number)");
-      }
-
-      if (!this.bot.options.pace) {
-        await this.paceWarning();
-      }
-
-      if (n < -1 || n > 1) {
-        return await this.room.chat("no! (must be -1 < weight < 1)");
-      }
-
-      await this.room.chat(`ok gb_weight=${n}`);
-
-      this.bot.options.gb_weight = n;
-    }
-
-    if (argv[0] === "pace") {
-      if (argv[1] === "true") {
-        this.bot.options.pace = true;
-        return await this.room.chat("ok pace=true");
-      } else if (argv[1] === "false") {
-        this.bot.options.pace = false;
-        return await this.room.chat("ok pace=false");
-      } else {
-        return await this.room.chat(
-          'no! (pace must be one of "true" | "false")',
-        );
-      }
-    }
-
-    if (argv[0] === "can_hold") {
-      if (argv[1] === "true") {
-        this.bot.options.can_hold = true;
-        return await this.room.chat("ok can_hold=true");
-      } else if (argv[1] === "false") {
-        this.bot.options.can_hold = false;
-        return await this.room.chat("ok can_hold=false");
-      } else {
-        return await this.room.chat(
-          'no! (can_hold must be one of "true" | "false")',
-        );
-      }
-    }
-
-    if (argv[0] === "upstack") {
-      if (argv[1] === "true") {
-        this.bot.options.upstack = true;
-        return await this.room.chat("ok upstack=true");
-      } else if (argv[1] === "false") {
-        this.bot.options.upstack = false;
-        return await this.room.chat("ok upstack=false");
-      } else {
-        return await this.room.chat(
-          'no! (upstack must be one of "true" | "false")',
-        );
-      }
-    }
-
-    if (argv[0] === "preset") {
-      if (argv[1] in presets) {
-        this.bot.options = presets[argv[1]];
-
-        return await this.sendSettings();
-      } else {
-        return await this.room.chat(
-          `no! (unknown preset; presets are ${Object.keys(presets).join(", ")})`,
         );
       }
     }
@@ -461,21 +281,21 @@ export class Instance {
 
     return await this.room.chat(
       "key".padStart(longest_k, " ") +
-        " | " +
-        "value".padEnd(longest_v, " ") +
-        "\n" +
-        "-".repeat(longest_k) +
-        "---" +
-        "-".repeat(longest_v) +
-        "\n" +
-        keys
-          .map(
-            (x) =>
-              x.padStart(longest_k, " ") +
-              " | " +
-              this.bot.options[x as keyof typeof this.bot.options],
-          )
-          .join("\n"),
+      " | " +
+      "value".padEnd(longest_v, " ") +
+      "\n" +
+      "-".repeat(longest_k) +
+      "---" +
+      "-".repeat(longest_v) +
+      "\n" +
+      keys
+        .map(
+          (x) =>
+            x.padStart(longest_k, " ") +
+            " | " +
+            this.bot.options[x as keyof typeof this.bot.options],
+        )
+        .join("\n"),
     );
   }
 
