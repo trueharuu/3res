@@ -453,7 +453,6 @@ impl Iterator for FinesseIterator {
         let val = (self.f.packed >> (self.idx * 4)) & 0x0F;
         self.idx += 1;
         Some(unsafe {
-            dbg!("usafe block");
             std::mem::transmute::<u8, Key>(val as u8)
         })
     }

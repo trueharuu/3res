@@ -4,7 +4,6 @@ import { check_settings } from "./check";
 import { tracing } from "./tracing";
 import { Bot, BotOptions, FinesseStyle, option_descriptions } from "./bot";
 import { ty } from "./util";
-import { presets } from "./presets";
 
 export class Instance {
   private cl!: Client;
@@ -198,19 +197,19 @@ export class Instance {
       this.bot.options.vision = n;
     }
 
-    if (argv[0] === "foresight") {
+    if (argv[0] === "n") {
       const n = Number(argv[1]);
       if (Number.isNaN(n)) {
         return await this.room.chat("no! (not a number)");
       }
 
       if (n > 7 || n < 0) {
-        return await this.room.chat("no! (must be 0 <= foresight <= 7)");
+        return await this.room.chat("no! (must be 0 <= n <= 7)");
       }
 
-      await this.room.chat(`ok foresight=${n}`);
+      await this.room.chat(`ok n=${n}`);
 
-      this.bot.options.foresight = n;
+      this.bot.options.n = n;
     }
 
     if (argv[0] === "can180") {
@@ -244,12 +243,6 @@ export class Instance {
     if (c) {
       if (c === "help") {
         return await this.room.chat("it's this one");
-      }
-
-      if (c === "preset") {
-        return await this.room.chat(
-          `available presets are: ${Object.keys(presets).join(", ")}`,
-        );
       }
 
       if (c in this.bot.options) {

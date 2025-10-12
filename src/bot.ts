@@ -4,6 +4,7 @@ import {
 } from "node:child_process";
 import { Engine, Key, KeyPress, Room } from "./ty";
 import { Types } from "@haelp/teto";
+import { tracing } from "./tracing";
 
 export enum FinesseStyle {
   Human = "human",
@@ -13,7 +14,7 @@ export enum FinesseStyle {
 export interface BotOptions {
   pps: number;
   vision: number;
-  foresight: number;
+  n: number;
   can180: boolean;
   finesse: FinesseStyle;
   kicktable: string;
@@ -22,8 +23,8 @@ export interface BotOptions {
 export const option_descriptions: Record<keyof BotOptions, string> = {
   pps: "pieces per second during [normal] pace",
   vision: "amount of pieces in the queue to consider",
-  foresight:
-    "the amount of pieces after [vision] to guess for in order to break ties",
+  n:
+    "the tallest PC we are able to perform",
   can180: "whether to do 180s",
   finesse: 'style of placements; either "human" or "instant"',
   kicktable: "which kicktable to use",
@@ -38,7 +39,7 @@ export class Bot {
   public options: BotOptions = {
     pps: 4,
     vision: 7,
-    foresight: 1,
+    n: 4,
     can180: true,
     finesse: FinesseStyle.Human,
     kicktable: "srsx",
@@ -52,9 +53,51 @@ export class Bot {
     this.reset();
   }
 
+  public piece_queue: Array<[string, Array<Key>]> = [];
+  private acc: number = 0;
   public async tick(c: Engine): Promise<Types.Game.Tick.Out> {
+    // if (c.frame === 0) {
+    // await this.populate(c);
+    // }
+    this.acc += this.options.pps / this.fps;
     const keys: Array<KeyPress> = [];
+    while (this.acc >= 1) {
+      if (this.piece_queue.length === 0) {
+        const pq = await this.regenerate(c);
+        this.piece_queue = pq;
+      }
+
+      const next = this.piece_queue.shift()!;
+
+
+      let [t, ks] = next;
+
+      if (t !== c.falling.symbol) {
+        ks.unshift('hold');
+      }
+
+      ks.push('hardDrop');
+      keys.push(...this.key_presses(ks, c));
+
+      this.acc -= 1;
+    }
+
     return { keys };
+  }
+
+  public async populate(c: Engine) {
+    this.send(`pcp ${this.flags(c)} ${this.options.vision} ${this.options.n}`);
+  }
+
+  public async regenerate(c: Engine): Promise<Array<[string, Array<Key>]>> {
+    const queue = ((c.held || '') + c.falling.symbol + c.queue.value.join('')).toUpperCase();
+    const resp = await this.send(`pcr ${this.flags(c)} ${this.options.vision} ${queue} ${this.options.n}`);
+
+    return resp.split(' ').map(x => {
+      let [piece, f] = x.split(':');
+      let keys = f.split(',');
+      return [piece, keys] as [string, Array<Key>];
+    });
   }
 
   public key_presses(ks: Array<Key>, c: Engine): Array<KeyPress> {
@@ -117,6 +160,8 @@ export class Bot {
           this.resolver = null;
         }
       }
+
+      tracing.debug("recv", data);
     });
     this.spool.stderr.on("data", (data) => {
       process.stderr.write(data);
@@ -124,7 +169,7 @@ export class Bot {
   }
 
   public async send(input: string): Promise<string> {
-    // tracing.debug("send", input);
+    tracing.debug("send", input);
 
     return new Promise<string>((resolve) => {
       this.resolver = resolve;

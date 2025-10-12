@@ -5,7 +5,11 @@ use std::{
 
 use smallvec::{SmallVec, smallvec};
 
-use crate::{board::Board, environment::Environment, input::{Pair}};
+use crate::{
+    board::Board,
+    environment::Environment,
+    input::{Finesse, Key, Pair},
+};
 
 #[derive(Clone, Eq, Debug)]
 pub struct History(pub SmallVec<[Pair; 16]>);
@@ -125,7 +129,6 @@ pub fn generate_all_pc_queues(n: usize, env: &Environment) -> Set<History> {
     Set::new()
 }
 
-
 /// Obtains all possible ways to play a queue given one hold
 /*
 def get_queue_orders(queue):
@@ -149,7 +152,13 @@ pub fn get_queue_orders(queue: &[char]) -> Vec<String> {
     }
 
     if queue.len() > 2 {
-        for order in get_queue_orders(&[queue[0]].iter().chain(&queue[2..]).copied().collect::<Vec<_>>()) {
+        for order in get_queue_orders(
+            &[queue[0]]
+                .iter()
+                .chain(&queue[2..])
+                .copied()
+                .collect::<Vec<_>>(),
+        ) {
             results.push(format!("{}{}", queue[1], order));
         }
     }
@@ -157,7 +166,7 @@ pub fn get_queue_orders(queue: &[char]) -> Vec<String> {
     results
 }
 
-pub fn max_pcs_in_queue(queue: &[char], env: &Environment, pcs: Set<History>) -> Vec<History> {
-    
-    todo!()
+pub fn max_pcs_in_queue(queue: &[char], _env: &Environment, _pcs: Set<History>) -> Vec<History> {
+    // todo: make this not fake LOL
+    vec![History(smallvec![Pair(queue[0], Finesse::with(&[Key::Rotate180]))])]
 }

@@ -29,6 +29,48 @@ pub enum DropType {
 }
 
 impl<'a> Environment<'a> {
+    pub fn new(state: &'a State, flags: &str, vision: usize, foresight: usize) -> Self {
+        let mut can_180 = false;
+        let mut can_tap = false;
+        let mut can_das = false;
+        let mut can_hold = false;
+        let mut upstack = false;
+        let mut droptype = DropType::Soft;
+
+        for c in flags.chars() {
+            match c {
+                'f' => can_180 = true,
+                't' => can_tap = true,
+                'd' => can_das = true,
+                'h' => can_hold = true,
+                'u' => upstack = true,
+                '-' => {}
+                _ => panic!("unknown flag: {}", c),
+            }
+        }
+
+        Self {
+            can_180,
+            can_tap,
+            can_das,
+            can_hold,
+            droptype: DropType::Sonic,
+            vision,
+            foresight,
+            upstack,
+            state,
+        }
+    }
+    pub fn flags(&self) -> String {
+        format!(
+            "{}{}{}{}{}",
+            if self.can_180 { 'f' } else { '-' },
+            if self.can_tap { 't' } else { '-' },
+            if self.can_das { 'd' } else { '-' },
+            if self.can_hold { 'h' } else { '-' },
+            if self.upstack { 'u' } else { '-' },
+        )
+    }
     #[must_use]
     pub fn keyboard(&self) -> Vec<Key> {
         let mut m = vec![];

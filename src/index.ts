@@ -52,6 +52,9 @@ process.on("uncaughtException", (c) => {
   const is: Array<Instance> = [];
 
   master.on("social.invite", async (c) => {
+    if (!process.env.HOSTS?.split(",").map((x) => x.trim()).includes(c.sender)) {
+      return;
+    }
     tracing.perf(`join ${c.roomid}`);
     const instance = new Instance(login, c.roomid);
     await instance.spawn();
