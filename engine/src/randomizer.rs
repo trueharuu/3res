@@ -1,10 +1,8 @@
-use crate::piece::PieceTy;
-
 pub struct Rng {
     pub seed: i32,
     last_generated: Option<usize>,
     bagid: usize,
-    extrabag: Vec<char>,
+    extrabag: Vec<u8>,
 }
 
 impl Rng {
@@ -21,7 +19,7 @@ impl Rng {
         }
     }
 
-    pub const BAG: [char; 7] = ['Z', 'L', 'O', 'S', 'I', 'J', 'T'];
+    pub const BAG: [u8; 7] = [b'Z', b'L', b'O', b'S', b'I', b'J', b'T'];
 
     #[must_use]
     #[allow(clippy::should_implement_trait)]
@@ -30,6 +28,11 @@ impl Rng {
         self.seed
     }
 
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss
+    )]
     pub fn pick<'a, T>(&mut self, array: &'a [T]) -> &'a T {
         let idx = (self.next_float() * (array.len() as f64)).floor() as usize;
         &array[idx.min(array.len() - 1)]
@@ -58,12 +61,18 @@ impl Rng {
     }
 
     #[allow(const_item_mutation)]
-    pub fn next_item(&mut self, randomizer: Randomizer) -> Vec<PieceTy> {
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    pub fn next_item(&mut self, randomizer: Randomizer) -> Vec<u8> {
         match randomizer {
             Randomizer::Bag7 => self.shuffle_array(&mut Self::BAG).to_vec(),
             Randomizer::Bag14 => self
                 .shuffle_array(&mut [
-                    'Z', 'L', 'O', 'S', 'I', 'J', 'T', 'Z', 'L', 'O', 'S', 'I', 'J', 'T',
+                    b'Z', b'L', b'O', b'S', b'I', b'J', b'T', b'Z', b'L', b'O', b'S', b'I', b'J',
+                    b'T',
                 ])
                 .to_vec(),
             Randomizer::Classic => {
@@ -78,24 +87,24 @@ impl Rng {
                 vec![tet[idx]]
             }
             Randomizer::Pairs => {
-                let mut z = ['Z', 'L', 'O', 'S', 'I', 'J', 'T'];
+                let mut z = [b'Z', b'L', b'O', b'S', b'I', b'J', b'T'];
                 let s = self.shuffle_array(&mut z);
                 let mut pairs = [s[0], s[0], s[0], s[1], s[1], s[1]];
                 self.shuffle_array(&mut pairs).to_vec()
             }
             Randomizer::Bag7P1 => {
-                let t: &[char] = &Self::BAG;
+                let t: &[u8] = &Self::BAG;
                 let extra = t[(self.next_float() * 7.0).floor() as usize];
                 let mut t2 = [t, &[extra]].concat();
                 let bag = self.shuffle_array(&mut t2);
                 bag.to_vec()
             }
             Randomizer::Bag7P2 => {
-                let t: &[char] = &Self::BAG;
+                let t: &[u8] = &Self::BAG;
                 let extr1 = t[(self.next_float() * 7.0).floor() as usize];
                 let extr2 = t[(self.next_float() * 7.0).floor() as usize];
 
-                let mut t2: Vec<char> = [t, &[extr1, extr2]].concat();
+                let mut t2: Vec<u8> = [t, &[extr1, extr2]].concat();
                 let bag = self.shuffle_array(&mut t2);
                 bag.to_vec()
             }
@@ -124,12 +133,14 @@ impl Rng {
     // the `hint` while placying on this `randomizer`
     // for example if hint is `ZSSIJLO`, we know either `TZ` or `ZT` must come after it
     // on Bag7 randomizer.
+    #[must_use]
     pub fn guess(hint: &[char], len: usize, randomizer: Randomizer) -> Vec<Vec<char>> {
         let _ = (hint, len, randomizer);
         todo!();
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum Randomizer {
     Bag7,
     Bag14,

@@ -31,6 +31,7 @@ export const option_descriptions: Record<keyof BotOptions, string> = {
 };
 
 export class Bot {
+  // private room!: Room;
   public fps: number = 60;
   public spool!: ChildProcessWithoutNullStreams;
   private buffer = "";
@@ -39,7 +40,7 @@ export class Bot {
   public options: BotOptions = {
     pps: 4,
     vision: 7,
-    n: 4,
+    n: 6,
     can180: true,
     finesse: FinesseStyle.Human,
     kicktable: "srsx",
@@ -49,7 +50,7 @@ export class Bot {
     return c.board.state.flat().filter((x) => x !== null).length;
   }
 
-  public constructor() {
+  public constructor(private room: Room) {
     this.reset();
   }
 
@@ -62,17 +63,26 @@ export class Bot {
     this.acc += this.options.pps / this.fps;
     const keys: Array<KeyPress> = [];
     while (this.acc >= 1) {
+      tracing.error(`${c.held?.toUpperCase() || ''}${c.falling.symbol.toUpperCase()}${c.queue.value.join('').toUpperCase()}`)
       if (this.piece_queue.length === 0) {
         const pq = await this.regenerate(c);
+        if (this.dead) {
+          if (!this.announced) {
+            this.announced = true;
+            await this.room.chat(':stare:');
+          }
+
+          return { keys: [] }
+        }
+        tracing.warn(`regenerating ${pq.map(x => x[0])}`);
         this.piece_queue = pq;
       }
 
       const next = this.piece_queue.shift()!;
-
-
       let [t, ks] = next;
+      tracing.info(`placing ${t} (${c.falling.symbol} active, ${c.held} hold, ${c.queue.at(0)} next)`);
 
-      if (t !== c.falling.symbol) {
+      if (t.toLowerCase() !== c.falling.symbol) {
         ks.unshift('hold');
       }
 
@@ -89,13 +99,21 @@ export class Bot {
     this.send(`pcp ${this.flags()} ${this.options.vision} ${this.options.n}`);
   }
 
+  private dead: boolean = false;
+  private announced: boolean = false;
   public async regenerate(c: Engine): Promise<Array<[string, Array<Key>]>> {
     const queue = ((c.held || '') + c.falling.symbol + c.queue.value.join('')).toUpperCase();
-    const resp = await this.send(`pcr ${this.flags()} ${this.options.vision} ${queue} ${this.options.n}`);
 
+    const resp = await this.send(`pcr ${this.flags()} ${queue.slice(0, this.options.vision)} ${this.options.n}`);
+
+    if (resp === '!') {
+      this.dead = true;
+      return [];
+    }
     return resp.split(' ').map(x => {
-      let [piece, f] = x.split(':');
-      let keys = f.split(',');
+      // console.log('part', x);
+      let [piece, f] = x.slice(x.indexOf('(') + 1, x.indexOf(')')).split(':');
+      let keys = f.split(',').filter(x => x !== '');
       return [piece, keys] as [string, Array<Key>];
     });
   }
@@ -181,7 +199,8 @@ export class Bot {
     return [
       this.options.can180 ? "f" : "-",
       "t",
-      "-",
+      'd', 'h',
+      "u",
     ].join("");
   }
 

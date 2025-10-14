@@ -2,7 +2,8 @@ use smallvec::SmallVec;
 
 use crate::{
     input::{Key, Pair},
-    pc::{History, Set, generate_all_pc_queues},
+    pc::{History, Map, generate_all_pc_queues},
+    piece::Queue,
     repl::State,
 };
 use std::io::Write;
@@ -17,7 +18,7 @@ pub struct Environment<'a> {
     pub vision: usize,
     pub foresight: usize,
     pub upstack: bool,
-    pub state: &'a State,
+    pub state: &'a mut State,
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -29,7 +30,8 @@ pub enum DropType {
 }
 
 impl<'a> Environment<'a> {
-    pub fn new(state: &'a State, flags: &str, vision: usize, foresight: usize) -> Self {
+    #[must_use] 
+    pub fn new(state: &'a mut State, flags: &str, vision: usize, foresight: usize) -> Self {
         let mut can_180 = false;
         let mut can_tap = false;
         let mut can_das = false;
@@ -43,8 +45,7 @@ impl<'a> Environment<'a> {
                 'd' => can_das = true,
                 'h' => can_hold = true,
                 'u' => upstack = true,
-                '-' => {}
-                _ => panic!("unknown flag: {}", c),
+                _ => {}
             }
         }
 
@@ -60,6 +61,7 @@ impl<'a> Environment<'a> {
             state,
         }
     }
+    #[must_use] 
     pub fn flags(&self) -> String {
         format!(
             "{}{}{}{}{}",
@@ -102,9 +104,10 @@ impl<'a> Environment<'a> {
         m
     }
 
-    pub fn pcs(&self, n: usize, force: bool) -> Set<History> {
+    #[must_use] 
+    pub fn pcs(&self, n: usize, force: bool) -> Map<Queue, History> {
         // if it exists as a file, load from file
-        let path = format!("data/{}_{n}.pc", self.state.fingerprint.0);
+        let path = format!("data/{}_{}_{n}.pc", self.state.fingerprint.0, self.flags());
 
         if !force && let Ok(s) = std::fs::read_to_string(&path) {
             return Self::parse_pcs(&s);
@@ -114,8 +117,10 @@ impl<'a> Environment<'a> {
         let mut f = std::fs::File::create(&path).unwrap();
         writeln!(
             f,
-            "#n={n};kicktable={};total={}",
-            self.state.fingerprint.0, 0,
+            "#n={n};kicktable={};total={};{}",
+            self.state.fingerprint.0,
+            0,
+            self.flags()
         )
         .unwrap();
         generate_all_pc_queues(&mut f, n, self);
@@ -123,7 +128,7 @@ impl<'a> Environment<'a> {
         // dedup the file
         let s = std::fs::read_to_string(&path).unwrap();
         let mut lines: Vec<_> = s.lines().collect();
-        lines.sort();
+        lines.sort_unstable();
         lines.dedup_by_key(|x| x.split('=').next().unwrap().trim());
         let s = lines.join("\n");
 
@@ -132,8 +137,9 @@ impl<'a> Environment<'a> {
         Self::parse_pcs(&std::fs::read_to_string(&path).unwrap())
     }
 
-    pub fn parse_pcs(s: &str) -> Set<History> {
-        let mut pcs = Set::new();
+    #[must_use] 
+    pub fn parse_pcs(s: &str) -> Map<Queue, History> {
+        let mut pcs = Map::new();
 
         for line in s.lines() {
             let line = line.trim();
@@ -142,7 +148,7 @@ impl<'a> Environment<'a> {
             }
 
             let mut parts = line.split('=');
-            let _ = parts.next().unwrap().trim();
+            let queue = parts.next().unwrap().trim().parse().unwrap();
             let finesse = parts.next().unwrap().trim();
 
             // convert finesse into Vec<Pair>
@@ -150,13 +156,11 @@ impl<'a> Environment<'a> {
 
             let f = finesse
                 .split_ascii_whitespace()
-                .map(|x| x.parse())
+                .map(str::parse)
                 .collect::<Result<SmallVec<[Pair; _]>, _>>()
                 .unwrap();
 
-            pcs.insert(History(f));
-
-            // println!("{queue} | {f:?}");
+            pcs.insert(queue, History(f));
         }
 
         pcs

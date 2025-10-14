@@ -1,23 +1,25 @@
 use std::{
-    collections::{HashMap, HashSet},
-    hash::{DefaultHasher, Hash, Hasher},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque},
+    hash::Hash,
     io::Write,
 };
 
 use smallvec::{SmallVec, smallvec};
 
-use crate::{
-    board::Board,
-    environment::Environment,
-    input::{Finesse, Key, Pair},
-};
+use crate::{board::Board, environment::Environment, input::Pair, piece::Queue};
 
 #[derive(Clone, Eq, Debug)]
-pub struct History(pub SmallVec<[Pair; 4]>);
+pub struct History(pub SmallVec<[Pair; 8]>);
 
 impl History {
-    pub fn queue(&self) -> impl Iterator<Item = char> {
-        self.0.iter().map(|x| x.0)
+    #[must_use] 
+    pub fn queue(&self) -> Queue {
+        self.0.iter().map(|x| x.0).collect()
+    }
+
+    #[must_use] 
+    pub fn queue_str(&self) -> String {
+        self.queue().as_str()
     }
 }
 
@@ -31,9 +33,9 @@ impl PartialEq for History {
 }
 
 impl Hash for History {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        for c in self.queue() {
-            c.hash(state);
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        for i in self.queue() {
+            i.hash(state);
         }
     }
 }
@@ -56,15 +58,8 @@ impl Ord for History {
     }
 }
 
-fn hash_queue(history: &History) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    for c in history.queue() {
-        c.hash(&mut hasher);
-    }
-    hasher.finish()
-}
-
-pub type Set<T> = HashSet<T>;
+pub type Set<T> = BTreeSet<T>;
+pub type Map<K, V> = BTreeMap<K, V>;
 /// Generates all possible queues of length less than or equal to `n` such that
 /// from an empty board, queue can be placed such that we result in a perfect clear
 /// for each queue, return the list of inputs used to get there
@@ -74,46 +69,40 @@ pub type Set<T> = HashSet<T>;
 /// JJ = J () J (f r)
 /// TTSZ = [longer finesse...]
 pub fn generate_all_pc_queues(buf: &mut impl Write, n: usize, env: &Environment) {
-    const MAX_CACHE_SIZE: usize = 10000; // Maximum number of cached transitions
-    
-    // Use a Vec as a stack for depth-first search (uses less memory than VecDeque)
-    let mut stack: Vec<(Board, History)> = Vec::new();
-    let mut forwards_saved_transitions = HashMap::with_capacity(MAX_CACHE_SIZE);
-    
-    // Use a more compact visited state representation
-    let mut visited: HashSet<u64> = HashSet::new();
-    
-    // Track cache stats for periodic cleanup
-    let mut cache_access_count = 0;
-    
-    stack.push((Board::empty(), History(smallvec![])));
+    // forwards_saved_transitions = {}  # (board_hash, piece) -> next_board_list
+    let mut forwards_saved_transitions = HashMap::new();
+    // forwards_queue = deque()
+    let mut forwards_queue: VecDeque<(Board, History)> = VecDeque::new();
 
-    while let Some((board, history)) = stack.pop() {
-        // Create a combined hash of board and history
-        let mut hasher = DefaultHasher::new();
-        board.hash(&mut hasher);
-        for c in history.queue() {
-            c.hash(&mut hasher);
-        }
-        let state_hash = hasher.finish();
-        
-        if !visited.insert(state_hash) {
+    // forwards_reachable_states = defaultdict(set)  # board_hash -> queue_set
+
+    let mut visited = HashSet::new();
+    let mut vq = HashSet::new();
+
+    forwards_queue.push_back((Board::empty(), History(smallvec![])));
+
+    // let mut i: usize = 0;
+    // let mut max = 7usize.pow(n as u32);
+
+    while let Some(current) = forwards_queue.pop_front() {
+        let key = (current.0, current.1.queue_str());
+        if visited.contains(&key) {
             continue;
         }
-        
-        // Periodically clear the transition cache if it gets too large
-        cache_access_count += 1;
-        if cache_access_count % 1000 == 0 && forwards_saved_transitions.len() > MAX_CACHE_SIZE {
-            forwards_saved_transitions.clear();
+
+        visited.insert(key.clone());
+        if vq.contains(&current.1.queue()) {
+            continue;
         }
 
+        // i += 1;
+        let (board, history) = current;
+        
         // check each possible next piece
         for piece in env.state.bag.pieces() {
-            let next_boards = forwards_saved_transitions
-                .entry((board, piece))
-                .or_insert_with(|| board.get_next_boards(piece, env));
+            forwards_saved_transitions.entry((board, piece)).or_insert_with(|| board.get_next_boards(piece, env));
 
-            for &mut (next_board, f) in next_boards {
+            for &(next_board, f) in forwards_saved_transitions.get(&(board, piece)).unwrap() {
                 // track reachable board states
                 if next_board.height() <= n {
                     let new_history: History = {
@@ -122,16 +111,20 @@ pub fn generate_all_pc_queues(buf: &mut impl Write, n: usize, env: &Environment)
                         History(n)
                     };
                     if new_history.0.len() < n && !next_board.is_empty() {
-                        stack.push((next_board, new_history));
+                        forwards_queue.push_back((next_board, new_history.clone()));
                     } else if next_board.is_empty() {
+                        if !vq.insert(new_history.queue()) {
+                            continue;
+                        }
+
                         writeln!(
                             buf,
                             "{} = {}",
-                            new_history.queue().collect::<String>(),
+                            new_history.queue_str(),
                             new_history
                                 .0
                                 .iter()
-                                .map(|x| format!("({}:{})", x.0, x.1.short()))
+                                .map(ToString::to_string)
                                 .collect::<Vec<_>>()
                                 .join(" ")
                         )
@@ -154,36 +147,141 @@ def get_queue_orders(queue):
   for queue_order in get_queue_orders(queue[0] + queue[2:]):
     yield queue[1] + queue_order
 */
-pub fn get_queue_orders(queue: &[char]) -> Vec<String> {
-    if queue.len() == 1 {
-        return vec![queue[0].to_string()];
-    }
-
+#[must_use] 
+pub fn get_queue_orders(queue: Queue) -> Vec<Queue> {
     let mut results = vec![];
 
-    for order in get_queue_orders(&queue[1..]) {
-        results.push(format!("{}{}", queue[0], order));
+    if queue.len() == 1 {
+        results.push(Queue::from_iter([queue.get(0)]));
+        return results;
     }
 
-    if queue.len() > 2 {
-        for order in get_queue_orders(
-            &[queue[0]]
-                .iter()
-                .chain(&queue[2..])
-                .copied()
-                .collect::<Vec<_>>(),
-        ) {
-            results.push(format!("{}{}", queue[1], order));
+    for qo in get_queue_orders(queue.slice(1..)) {
+        let mut new_q = Queue::new();
+        new_q.push(queue.get(0));
+        for piece in qo {
+            new_q.push(piece);
+        }
+        results.push(new_q);
+    }
+
+    if queue.len() >= 2 {
+        let mut tail = Queue::new();
+        tail.push(queue.get(0)); // first piece
+        for piece in queue.slice(2..) {
+            tail.push(piece);
+        }
+
+        for qo in get_queue_orders(tail) {
+            let mut new_q = Queue::new();
+            new_q.push(queue.get(1)); // second piece is prepended
+            for piece in qo {
+                new_q.push(piece);
+            }
+            results.push(new_q);
         }
     }
 
     results
 }
 
-pub fn max_pcs_in_queue(queue: &[char], _env: &Environment, _pcs: Set<History>) -> Vec<History> {
-    // todo: make this not fake LOL
-    vec![History(smallvec![Pair(
-        queue[0],
-        Finesse::with(&[Key::Rotate180])
-    )])]
+#[must_use] 
+pub fn max_pcs_in_queue(
+    queue: Queue,
+    env: &Environment,
+    pcs: &Map<Queue, History>,
+) -> (usize, Vec<History>) {
+    let maxn = pcs.iter().map(|x| x.0.len()).max().unwrap_or_default();
+
+    let mut dp: HashMap<(usize, u8), (usize, Option<(usize, u8)>, Option<Queue>)> = HashMap::new();
+
+    dp.insert((1, queue.get(0)), (0, None, None));
+
+    for i in 1..queue.len() {
+        let mut reachable_holds: Vec<u8> = env.state.bag.pieces().collect::<Vec<_>>();
+        reachable_holds.push(255);
+
+        for &hold in &reachable_holds {
+            let current_state = (i, hold);
+            if let Some(cdp) = dp.get(&current_state).copied() {
+                for pieces_used in 1..=std::cmp::min(queue.len() - i, maxn) {
+                    let mut pcq = Queue::new();
+                    pcq.push(hold);
+                    pcq.extend(queue.slice(i..i + pieces_used));
+
+                    let saves = get_pc_saves(pcq, pcs);
+
+                    for (save, v) in saves {
+                        let next_state = (i + pieces_used, save);
+                        let new_score = cdp.0 + 1;
+
+                        if !dp.contains_key(&next_state)
+                            || new_score > dp.get(&next_state).unwrap().0
+                        {
+                            dp.insert(next_state, (new_score, Some(current_state), Some(v)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut max_score = 0;
+    let mut best_state = None;
+    for (&state, &(score, ..)) in &dp {
+        if score > max_score {
+            max_score = score;
+            best_state = Some(state);
+        }
+    }
+
+    if max_score == 0 || best_state.is_none() {
+        return (0, vec![]);
+    }
+
+    let mut rev = Vec::new();
+    let mut current_state = best_state;
+
+    while let Some(c) = current_state {
+        if let Some(&(_, prev, Some(ref t))) = dp.get(&c) {
+            rev.push(*t);
+            current_state = prev;
+        } else {
+            break;
+        }
+    }
+
+    let history: Vec<History> = rev
+        .iter()
+        .filter_map(|x| pcs.get(x))
+        .cloned()
+        .rev()
+        .collect();
+
+    (max_score, history)
+}
+
+#[must_use] 
+pub fn get_pc_saves(queue: Queue, pcs: &Map<Queue, History>) -> Map<u8, Queue> {
+    let mut saves = Map::new();
+
+    for qo in get_queue_orders(queue) {
+        let len = qo.len();
+
+        if len == 0 {
+            continue;
+        }
+
+        let prefix = qo.slice(0..len - 1);
+
+        if pcs.contains_key(&prefix) {
+            saves.insert(qo.get(len - 1), prefix);
+        }
+
+        if pcs.contains_key(&qo) {
+            saves.insert(255, qo);
+        }
+    }
+
+    saves
 }

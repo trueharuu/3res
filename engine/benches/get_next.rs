@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use criterion::{Criterion, criterion_group, criterion_main};
 use engine::{
     environment::{DropType, Environment},
@@ -40,11 +42,12 @@ pub fn get_next_bm(c: &mut Criterion) {
             can_tap: true,
             can_hold: true,
             upstack: true,
-            state: &State {
+            state: &mut State {
                 kicks,
                 bag,
                 corners,
                 fingerprint: ("srsx".into(), "tetromino".into(), "handheld".into()),
+                pcs: HashMap::new(),
             },
         };
 

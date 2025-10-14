@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
-use crate::{common::{
+use crate::common::{
     coordinate::{CoordinateParseErr, Coordinates},
     rotation::Rotation,
-}, piece::{PieceRef, PieceTy}};
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Corners {
@@ -11,9 +11,11 @@ pub struct Corners {
 }
 
 impl Corners {
-    #[must_use] 
-    pub fn get(&self, piece: PieceRef, rotation: Rotation) -> Option<&CornerSet> {
-        self.entries.iter().find(|x| x.piece == piece && x.rotation == rotation)
+    #[must_use]
+    pub fn get(&self, piece: u8, rotation: Rotation) -> Option<&CornerSet> {
+        self.entries
+            .iter()
+            .find(|x| x.piece == piece && x.rotation == rotation)
     }
 }
 
@@ -31,7 +33,7 @@ impl FromStr for Corners {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CornerSet {
-    pub piece: PieceTy,
+    pub piece: u8,
     pub rotation: Rotation,
     pub corners: Coordinates<i32>,
 }
@@ -51,7 +53,7 @@ impl FromStr for CornerSet {
         if let Some(p) = period
             && let Some(e) = eq
         {
-            let piece = s[0..p].parse().map_err(|_| CornerParseErr::Malformed)?;
+            let piece = s[0..p].parse::<char>().map(|x| x as u8).map_err(|_| CornerParseErr::Malformed)?;
             let rotation = s[p + 1..e]
                 .parse()
                 .map_err(CornerParseErr::UnknownRotation)?;

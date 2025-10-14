@@ -2,32 +2,30 @@ use std::{fmt::Display, str::FromStr};
 
 use rustc_hash::FxHashMap;
 
-use crate::{common::{
+use crate::common::{
     color::Color,
     coordinate::{CoordinateParseErr, Coordinates},
     rotation::Rotation,
-}, piece::{PieceRef, PieceTy}};
+};
 
 // format for .piece files
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Bag {
-    pub shapes: FxHashMap<(PieceTy, Rotation), Shape>,
+    pub shapes: FxHashMap<(u8, Rotation), Shape>,
 }
 
 impl Bag {
     #[must_use]
-    pub fn get(&self, name: PieceRef, rotation: Rotation) -> Option<&Shape> {
+    pub fn get(&self, name: u8, rotation: Rotation) -> Option<&Shape> {
         self.shapes.get(&(name, rotation))
     }
 
-    pub fn pieces(&self) -> impl Iterator<Item = PieceRef> {
-        self.shapes
-            .keys()
-            .map(|x| x.0)
+    pub fn pieces(&self) -> impl Iterator<Item = u8> {
+        self.shapes.keys().map(|x| x.0)
     }
 
     #[must_use]
-    pub fn width(&self, name: PieceRef, rotation: Rotation) -> Option<usize> {
+    pub fn width(&self, name: u8, rotation: Rotation) -> Option<usize> {
         let c = self.get(name, rotation)?;
         Some(
             (c.cells.values.iter().map(|x| x.x).max()?
@@ -66,7 +64,7 @@ impl FromStr for Bag {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Shape {
-    pub name: PieceTy,
+    pub name: u8,
     pub color: Color,
     pub rotation: Rotation,
     pub cells: Coordinates<i32>,
@@ -100,7 +98,7 @@ impl FromStr for Shape {
             && let Some(e) = eq
             && let Some(a) = at
         {
-            let name = s[..p].parse().map_err(|_| ShapeParseErr::Malformed)?;
+            let name = s[..p].parse::<char>().map(|x| x as u8).map_err(|_| ShapeParseErr::Malformed)?;
             let rotation = s[p + 1..e]
                 .parse()
                 .map_err(ShapeParseErr::UnknownRotation)?;

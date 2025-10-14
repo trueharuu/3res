@@ -1,9 +1,10 @@
 // #![warn(clippy::pedantic)]
-#![allow(clippy::perf, clippy::correctness)]
+#![warn(clippy::perf, clippy::correctness, clippy::pedantic)]
 #![allow(
     clippy::missing_errors_doc,
     clippy::struct_excessive_bools,
-    clippy::type_complexity
+    clippy::type_complexity,
+    clippy::missing_panics_doc
 )]
 #![deny(unused_qualifications)]
 

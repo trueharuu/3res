@@ -32,7 +32,7 @@ export class Instance {
       await this.room.switch("player").catch((c) => { });
     }
 
-    this.bot = new Bot();
+    this.bot = new Bot(this.room);
     this.cl.on("room.chat", async (c) => {
       await this.onRoomChat(c);
     });

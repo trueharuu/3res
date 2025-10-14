@@ -7,7 +7,7 @@ use crate::{
     board::Board,
     common::{coordinate::Coordinate, rotation::Rotation},
     environment::Environment,
-    piece::{Piece, PieceRef},
+    piece::Piece,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct Input<'a> {
 
 impl<'a> Input<'a> {
     #[must_use]
-    pub fn new(board: Board, p: PieceRef, environment: &'a Environment) -> Self {
+    pub fn new(board: Board, p: u8, environment: &'a Environment) -> Self {
         let piece = Piece {
             name: p,
             rotation: Rotation::North,
@@ -141,7 +141,6 @@ impl<'a> Input<'a> {
         let mut moved = false;
 
         while let Some(cy) = self.piece.location.y.checked_sub(1) {
-            // println!("dropping");
             self.piece.location.y = cy;
             if !self.is_valid() {
                 self.piece.location.y += 1;
@@ -157,7 +156,6 @@ impl<'a> Input<'a> {
 
     #[allow(clippy::missing_panics_doc)]
     pub fn rotate_cw(&mut self) {
-        // println!("calling rotate_cw()");
         let ir = self.piece.rotation;
         let fr = self.piece.rotation.rotate_cw();
         let k = self
@@ -169,7 +167,6 @@ impl<'a> Input<'a> {
         let ipos = self.piece.location;
 
         for &test in &k.tests {
-            // println!("testing {test}");
             let cx = ipos.x.checked_add_signed(test.x as isize);
             let cy = ipos.y.checked_add_signed(test.y as isize);
 
@@ -181,7 +178,6 @@ impl<'a> Input<'a> {
                 self.piece.location.y = y;
 
                 if !self.is_valid() {
-                    // println!("test {test} failed");
                     self.piece.rotation = ir;
                     self.piece.location = ipos;
                     continue;
@@ -363,15 +359,12 @@ impl Display for Key {
             f,
             "{}",
             match self {
-                Self::DasLeft => "moveLeft",
-                Self::DasRight => "moveRight",
-                Self::MoveLeft => "moveLeft",
-                Self::MoveRight => "moveRight",
+                Self::DasRight | Self::MoveRight => "moveRight",
+                Self::DasLeft | Self::MoveLeft => "moveLeft",
                 Self::Rotate180 => "rotate180",
                 Self::RotateCCW => "rotateCCW",
                 Self::RotateCW => "rotateCW",
-                Self::SoftDrop => "softDrop",
-                Self::SonicDrop => "softDrop",
+                Self::SoftDrop | Self::SonicDrop => "softDrop",
                 Self::Hold => "hold",
             }
         )
@@ -379,6 +372,7 @@ impl Display for Key {
 }
 
 impl Key {
+    #[must_use]
     pub fn short(self) -> &'static str {
         match self {
             Self::DasLeft => "dl",
@@ -452,13 +446,12 @@ impl Iterator for FinesseIterator {
         }
         let val = (self.f.packed >> (self.idx * 4)) & 0x0F;
         self.idx += 1;
-        Some(unsafe {
-            std::mem::transmute::<u8, Key>(val as u8)
-        })
+        Some(unsafe { std::mem::transmute::<u8, Key>(val as u8) })
     }
 }
 
 impl Finesse {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             packed: 0,
@@ -466,28 +459,52 @@ impl Finesse {
             spin: false,
         }
     }
+
+    #[must_use]
+    pub fn fix_das(self) -> Self {
+        let mut i = Self::new();
+        for t in self {
+            match t {
+                Key::DasLeft => {
+                    i.push(Key::MoveLeft);
+                    i.push(Key::MoveLeft);
+                    i.push(Key::MoveLeft);
+                }
+                Key::DasRight => {
+                    i.push(Key::MoveRight);
+                    i.push(Key::MoveRight);
+                    i.push(Key::MoveRight);
+                }
+                c => i.push(c),
+            }
+        }
+
+        i
+    }
+
     pub fn push(&mut self, key: Key) {
         self.packed |= (key as u128) << (self.len * 4);
         self.len += 1;
     }
 
+    #[must_use]
     pub fn get(&self, idx: u8) -> Option<Key> {
         if idx >= self.len {
             return None;
         }
         let val = (self.packed >> (idx * 4)) & 0x0F;
         Some(unsafe {
-            // dbg!("usafe block");
-            // println!("{self} {idx}");
             std::mem::transmute::<u8, Key>(val as u8)
         })
     }
 
+    #[must_use]
     pub fn with_spin(mut self, s: bool) -> Self {
         self.spin = s;
         self
     }
 
+    #[must_use]
     pub fn short(self) -> String {
         let mut v = vec![];
         for i in 0..self.len {
@@ -497,6 +514,7 @@ impl Finesse {
         v.join(",")
     }
 
+    #[must_use]
     pub fn with(t: &[Key]) -> Self {
         let mut n = Self::new();
         for i in t {
@@ -517,22 +535,18 @@ impl Debug for Finesse {
         f.debug_tuple("Finesse")
             .field(&self.packed)
             .field(&self.len)
-            .field(&(if self.spin { 1 } else { 0 }))
+            .field(&i32::from(self.spin))
             .finish()
     }
 }
 impl Display for Finesse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for t in 0..self.len {
-            write!(
-                f,
-                "{}{}",
-                self.get(t).unwrap(),
-                if t == self.len - 1 { "" } else { " " },
-            )?;
+        let mut n = vec![];
+        for i in 0..self.len {
+            n.push(self.get(i).unwrap().to_string());
         }
 
-        write!(f, "{}", if self.spin { " *" } else { "" })?;
+        write!(f, "{}", n.join(","))?;
 
         Ok(())
     }
@@ -545,14 +559,20 @@ impl FromStr for Finesse {
             return Ok(Self::new());
         }
         s.split(',')
-            .map(|x| x.parse())
+            .map(str::parse)
             .collect::<Result<Vec<_>, _>>()
             .map(|x| Self::with(&x))
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Pair(pub char, pub Finesse);
+pub struct Pair(pub u8, pub Finesse);
+
+impl Display for Pair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}:{})", self.0 as char, self.1.short())
+    }
+}
 
 // this is of format `(X:cw,ccw,sd,...)`
 impl FromStr for Pair {
@@ -563,19 +583,17 @@ impl FromStr for Pair {
             return Err("finesse must start with '(' and end with ')'".into());
         }
         let s = &s[1..s.len() - 1];
-        
+
         let mut parts = s.splitn(2, ':');
         let piece = parts
             .next()
             .ok_or_else(|| "missing piece".to_string())?
             .chars()
             .next()
+            .map(|x| x as u8)
             .ok_or_else(|| "piece must be a single character".to_string())?;
-        let finesse_str = parts
-            .next()
-            .ok_or_else(|| "missing finesse".to_string())?;
+        let finesse_str = parts.next().ok_or_else(|| "missing finesse".to_string())?;
         let finesse: Finesse = finesse_str.parse()?;
-
 
         Ok(Self(piece, finesse))
     }

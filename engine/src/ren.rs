@@ -5,14 +5,15 @@ use crate::{board::Board, environment::Environment, input::Finesse};
 #[derive(Debug, Clone, Eq)]
 pub struct Node<'a> {
     pub board: Board,
-    pub hold: Option<char>,
-    pub queue: &'a [char],
+    pub hold: Option<u8>,
+    pub queue: &'a [u8],
     pub prev: Option<Box<Self>>,
     pub finesse: Finesse,
-    pub used: Option<char>,
+    pub used: Option<u8>,
     pub ptr: usize,
 }
 
+#[must_use] 
 pub fn ren_bfs(state: &Node, env: &Environment) -> Vec<Vec<PathItem>> {
     let mut queue: VecDeque<Node> = VecDeque::new();
     let mut visited: Vec<Node> = Vec::new();
@@ -57,13 +58,13 @@ pub fn ren_bfs(state: &Node, env: &Environment) -> Vec<Vec<PathItem>> {
     vec![]
 }
 
-impl<'a> PartialEq for Node<'a> {
+impl PartialEq for Node<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.ptr == other.ptr && self.hold == other.hold && self.board == other.board
     }
 }
 
-impl<'a> Hash for Node<'a> {
+impl Hash for Node<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.ptr.hash(state);
         self.hold.hash(state);
@@ -71,7 +72,8 @@ impl<'a> Hash for Node<'a> {
     }
 }
 
-impl<'a> Node<'a> {
+impl Node<'_> {
+    #[must_use] 
     pub fn neighbors(self, env: &Environment) -> Vec<Self> {
         let mut n = vec![];
 
@@ -90,9 +92,8 @@ impl<'a> Node<'a> {
                 }
 
                 return n;
-            } else {
-                return n;
             }
+            return n;
         }
 
         // consume regularly
@@ -141,10 +142,12 @@ impl<'a> Node<'a> {
         n
     }
 
+    #[must_use] 
     pub fn size(&self) -> usize {
-        1 + self.prev.as_ref().map(|x| x.size()).unwrap_or(0)
+        1 + self.prev.as_ref().map_or(0, |x| x.size())
     }
 
+    #[must_use] 
     pub fn path(&self) -> Vec<PathItem> {
         if self.prev.is_none() {
             return vec![];
@@ -157,6 +160,7 @@ impl<'a> Node<'a> {
         .concat()
     }
 
+    #[must_use] 
     pub fn path_small(&self) -> String {
         self.path()
             .into_iter()
@@ -165,25 +169,23 @@ impl<'a> Node<'a> {
             .join(", ")
     }
 
+    #[must_use] 
     pub fn breaks(&self) -> usize {
         if let Some(p) = &self.prev {
-            (if self.board.num_minos() > p.board.num_minos() {
-                1
-            } else {
-                0
-            }) + p.breaks()
+            usize::from(self.board.num_minos() > p.board.num_minos()) + p.breaks()
         } else {
             0
         }
     }
 
+    #[must_use] 
     pub fn non_pcs(&self) -> usize {
         if let Some(p) = &self.prev {
-            (if self.board.num_minos() != 0 { 1 } else { 0 }) + p.non_pcs()
+            usize::from(self.board.num_minos() != 0) + p.non_pcs()
         } else {
             0
         }
     }
 }
 #[derive(Copy, Clone, Debug)]
-pub struct PathItem(pub Board, pub char, pub Finesse);
+pub struct PathItem(pub Board, pub u8, pub Finesse);

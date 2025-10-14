@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
     sync::{
         Arc,
@@ -10,7 +11,8 @@ use std::{
 use crate::{
     environment::Environment,
     file::{corners::Corners, kicks::Kicks, piece::Bag},
-    pc::max_pcs_in_queue,
+    pc::{History, Map, max_pcs_in_queue},
+    piece::Queue,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -19,6 +21,8 @@ pub struct State {
     pub bag: Bag,
     pub corners: Corners,
     pub fingerprint: (String, String, String),
+
+    pub pcs: HashMap<usize, Map<Queue, History>>,
 }
 pub struct Repl<I, O> {
     pub i: I,
@@ -40,7 +44,7 @@ where
         Self { i, o, state }
     }
 
-    pub fn spawn(self) -> ReplHandle {
+    pub fn spawn(mut self) -> ReplHandle {
         let running = Arc::new(AtomicBool::new(true));
         let run_clone = running.clone();
 
@@ -57,11 +61,9 @@ where
                     Ok(n) => n,
                 };
 
-                // eprintln!("ok {bytes}");
-
                 if bytes > 0 {
                     let trimmed = line.trim_end();
-                    let response = Self::respond(self.state.clone(), trimmed);
+                    let response = Self::respond(&mut self.state, trimmed);
                     let _ = writeln!(writer, "{response}");
                     let _ = writer.flush();
                 }
@@ -73,55 +75,50 @@ where
 
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
-    pub fn respond(s: State, arg: &str) -> String {
+    pub fn respond(s: &mut State, arg: &str) -> String {
         let mut argv = arg.split_ascii_whitespace();
         let Some(ma) = argv.next() else {
             return "?".to_string();
         };
         match ma {
             "pcr" => {
-                let e = Environment::new(
-                    &s,
-                    argv.next().unwrap(),
-                    argv.next().unwrap().parse().unwrap(),
-                    0,
-                );
+                let mut state = s.clone();
+                let e = Environment::new(&mut state, argv.next().unwrap(), 0, 0);
 
                 let queue = argv.next().unwrap();
-                let pcs = e.pcs(argv.next().unwrap().parse().unwrap(), false);
 
-                let chosen = max_pcs_in_queue(&queue.chars().collect::<Vec<_>>(), &e, pcs);
+                let n = argv.next().unwrap().parse().unwrap();
+                let pcs = if let Some(p) = s.pcs.get(&n) {
+                    p.clone()
+                } else {
+                    let z = e.pcs(n, false);
+                    s.pcs.insert(n, z.clone());
+                    z
+                };
 
-                chosen
-                    .first()
-                    .unwrap()
-                    .clone()
-                    .0
-                    .iter()
-                    .map(|x| {
-                        format!(
-                            "{}:{}",
-                            x.0,
-                            x.1.into_iter()
-                                .map(|x| x.to_string())
-                                .collect::<Vec<_>>()
-                                .join(",")
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" ")
+                let chosen =
+                    max_pcs_in_queue(queue.chars().map(|x| x as u8).collect::<Queue>(), &e, &pcs);
+
+                if let Some(f) = chosen.1.first() {
+                    f.0.iter()
+                        .map(|x| format!("({}:{})", x.0 as char, x.1.fix_das()))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    "!".to_string()
+                }
             }
             "pcp" => {
                 let e = Environment::new(
-                    &s,
+                    s,
                     argv.next().unwrap(),
                     argv.next().unwrap().parse().unwrap(),
                     0,
                 );
 
-                e.pcs(
+                let _ = e.pcs(
                     argv.next().unwrap().parse().unwrap(),
-                    argv.next().map(|x| x == "F").unwrap_or(false),
+                    argv.next().is_some_and(|x| x == "F"),
                 );
                 String::new()
             }

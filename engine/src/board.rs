@@ -6,10 +6,12 @@ pub struct Board {
 }
 
 impl Board {
+    #[must_use]
     pub fn empty() -> Self {
         Self { lo: 0, hi: 0 }
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.lo == 0 && self.hi == 0
     }
@@ -50,8 +52,9 @@ impl Board {
     }
 
     #[inline]
-    pub fn num_minos(&self) -> u16 {
-        (self.lo.count_ones() + self.hi.count_ones()) as u16
+    #[must_use]
+    pub fn num_minos(&self) -> u32 {
+        self.lo.count_ones() + self.hi.count_ones()
     }
 
     pub fn skim(&mut self) {
@@ -76,14 +79,16 @@ impl Board {
         self.lo = 0;
         self.hi = 0;
         for y in 0..32 {
-            self.lo |= (new_rows[y] as u128) << (y * 4);
-            self.hi |= (new_rows[32 + y] as u128) << (y * 4);
+            self.lo |= u128::from(new_rows[y]) << (y * 4);
+            self.hi |= u128::from(new_rows[32 + y]) << (y * 4);
         }
     }
+    #[must_use]
     pub const fn width(&self) -> usize {
         4
     }
 
+    #[must_use]
     pub fn height(&self) -> usize {
         // scan top half first
         for row in (0..32).rev() {
@@ -102,6 +107,7 @@ impl Board {
         0 // completely empty
     }
 
+    #[must_use]
     pub fn small(&self) -> String {
         use std::fmt::Write;
         let mut seen = false;
@@ -129,11 +135,7 @@ impl Board {
     }
 
     #[must_use]
-    pub fn get_next_boards(
-        &self,
-        piece: PieceRef,
-        environment: &Environment,
-    ) -> Vec<(Self, Finesse)> {
+    pub fn get_next_boards(&self, piece: u8, environment: &Environment) -> Vec<(Self, Finesse)> {
         let mut queue = VecDeque::new();
         let mut visited_active = HashMap::new();
         let mut final_placements = HashMap::new();
@@ -233,14 +235,14 @@ impl FromStr for Board {
         let encode = |rows: &[&str], target: &mut u128| -> Result<(), String> {
             for (i, &line) in rows.iter().rev().enumerate() {
                 if line.len() != 4 {
-                    return Err(format!("invalid row: {}", line));
+                    return Err(format!("invalid row: {line}"));
                 }
                 let row = i; // row 0 = bottom of half
                 for (col, ch) in line.chars().enumerate() {
                     match ch {
                         'X' => *target |= 1 << (row * 4 + col),
                         '_' => {}
-                        _ => return Err(format!("invalid char: {}", ch)),
+                        _ => return Err(format!("invalid char: {ch}")),
                     }
                 }
             }
@@ -249,7 +251,7 @@ impl FromStr for Board {
         encode(&hi_rows, &mut hi)?;
         encode(&lo_rows, &mut lo)?;
 
-        Ok(Board { hi, lo })
+        Ok(Board { lo, hi })
     }
 }
 impl std::fmt::Debug for Board {
@@ -271,5 +273,6 @@ use std::{
 };
 
 use crate::{
-    environment::Environment, input::{Finesse, Input}, piece::PieceRef
+    environment::Environment,
+    input::{Finesse, Input},
 };

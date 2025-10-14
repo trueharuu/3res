@@ -1,0 +1,2 @@
+#n=1;kicktable=srsx;total=0
+I = (I:)

@@ -5,7 +5,7 @@ use crate::{
         coordinate::{CoordinateParseErr, Coordinates},
         rotation::Rotation,
     },
-    piece::{Piece, PieceTy},
+    piece::Piece,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,7 +28,7 @@ impl Display for Kicks {
 }
 
 impl Kicks {
-    #[must_use] 
+    #[must_use]
     pub fn get(&self, piece: &Piece, source: Rotation, target: Rotation) -> Option<&Kick> {
         self.entries
             .iter()
@@ -50,7 +50,7 @@ impl FromStr for Kicks {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Kick {
-    pub piece: PieceTy,
+    pub piece: u8,
     pub source: Rotation,
     pub target: Rotation,
     pub tests: Coordinates<i32>,
@@ -58,7 +58,11 @@ pub struct Kick {
 
 impl Display for Kick {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}{}={}", self.piece, self.source, self.target, self.tests)
+        write!(
+            f,
+            "{}.{}{}={}",
+            self.piece, self.source, self.target, self.tests
+        )
     }
 }
 
@@ -78,7 +82,7 @@ impl FromStr for Kick {
         if let Some(p) = period
             && let Some(e) = eq
         {
-            let piece = s[0..p].parse().map_err(|_| KickParseErr::Malformed)?;
+            let piece = s[0..p].parse::<char>().map(|x| x as u8).map_err(|_| KickParseErr::Malformed)?;
             let source = s[p + 1..p + 2]
                 .parse()
                 .map_err(KickParseErr::UnknownRotation)?;
