@@ -1,6 +1,0 @@
-[submodule "triangle"]
-	path = triangle
-	url = https://github.com/halp1/triangle
-[submodule "tetris-4w-solver"]
-	path = tetris-4w-solver
-	url = https://github.com/usmath/tetris-4w-solver
