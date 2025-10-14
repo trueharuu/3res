@@ -114,6 +114,9 @@ export class Bot {
       // console.log('part', x);
       let [piece, f] = x.slice(x.indexOf('(') + 1, x.indexOf(')')).split(':');
       let keys = f.split(',').filter(x => x !== '');
+      if (keys.length === 0) {
+        keys.unshift('softDrop');
+      }
       return [piece, keys] as [string, Array<Key>];
     });
   }
@@ -163,6 +166,9 @@ export class Bot {
   }
 
   public async reset() {
+    this.announced = false;
+    this.dead = false;
+    this.piece_queue = [];
     this.spool = spawn("./engine/target/release/engine", [this.options.kicktable]);
     // this.spool = spawn("./engine/target/release/engine");
     this.spool.stdout.setEncoding("utf-8");
@@ -199,7 +205,7 @@ export class Bot {
     return [
       this.options.can180 ? "f" : "-",
       "t",
-      'd', 'h',
+      'h',
       "u",
     ].join("");
   }
