@@ -38,9 +38,9 @@ export class Bot {
   private resolver: ((s: string) => void) | null = null;
 
   public options: BotOptions = {
-    pps: 4,
-    vision: 7,
-    n: 6,
+    pps: 5,
+    vision: 14,
+    n: 7,
     can180: true,
     finesse: FinesseStyle.Human,
     kicktable: "srsx",
@@ -63,8 +63,12 @@ export class Bot {
     this.acc += this.options.pps / this.fps;
     const keys: Array<KeyPress> = [];
     while (this.acc >= 1) {
-      tracing.error(`${c.held?.toUpperCase() || ''}${c.falling.symbol.toUpperCase()}${c.queue.value.join('').toUpperCase()}`)
+      // tracing.error(`${c.held?.toUpperCase() || ''}${c.falling.symbol.toUpperCase()}${c.queue.value.join('').toUpperCase()}`)
       if (this.piece_queue.length === 0) {
+	      if (this.announced) {
+	      	return { keys: [] };
+	      }
+
         const pq = await this.regenerate(c);
         if (this.dead) {
           if (!this.announced) {
@@ -87,6 +91,7 @@ export class Bot {
       }
 
       ks.push('hardDrop');
+      tracing.info(`-> ${ks.join(',')}`);
       keys.push(...this.key_presses(ks, c));
 
       this.acc -= 1;
@@ -114,16 +119,13 @@ export class Bot {
       // console.log('part', x);
       let [piece, f] = x.slice(x.indexOf('(') + 1, x.indexOf(')')).split(':');
       let keys = f.split(',').filter(x => x !== '');
-      if (keys.length === 0) {
         keys.unshift('softDrop');
-      }
       return [piece, keys] as [string, Array<Key>];
     });
   }
 
   public key_presses(ks: Array<Key>, c: Engine): Array<KeyPress> {
     const keys: Array<KeyPress> = [];
-    // keys.push({ frame: c.frame, data: { key: "softDrop", subframe: 0.0 }, type: 'keydown' });
     if (this.options.finesse === FinesseStyle.Human) {
       // if playing at `p` pps then each input should take `fps/pps/n` frames for a piece that needs `n` inputs
       let delta = this.fps / this.options.pps / ks.length;
